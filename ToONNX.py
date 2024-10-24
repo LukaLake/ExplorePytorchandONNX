@@ -1,11 +1,17 @@
-import torch
 from ultralytics import YOLO
 
 # Load the YOLOv8 model
 model = YOLO('yolov8s.pt')
 
-# Export the model to ONNX format
-success = model.export(format='onnx', opset=12)
+# Move the model to CPU
+model.to('cpu')
 
-if success:
-    print("Model successfully converted to ONNX format.")
+# Export the model to ONNX format with static input shapes and without simplification
+model.export(
+    format='onnx',
+    opset=12,
+    simplify=False,
+    dynamic=False,
+)
+
+print("Model successfully converted to ONNX format.")
