@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 
 # Load the YOLOv8 model
-model = YOLO('yolov8s.pt')
+model = YOLO('yolo11m-seg.pt')
 
 # Move the model to CPU
 model.to('cpu')
