@@ -4,11 +4,25 @@ YOLO11 分割模型 ONNXRuntime
     功能1: 支持不用尺寸图像的输入
     功能2: 支持可视化分割结果
 """
- 
+
+import time
 import argparse
+import sys
 import cv2
 import numpy as np
 import onnxruntime as ort
+from screeninfo import get_monitors
+
+# 新路径列表
+new_paths = [
+    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin",
+    r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\libnvvp"
+]
+
+# 添加每个新路径到 PATH（避免重复添加）
+for path in new_paths:
+    if path not in sys.path:
+        sys.path.insert(0, path)  # 插入到 sys.path 开头，优先搜索
  
 # 定义 COCO 数据集的 80 个类别名称
 CLASS_NAMES = [
@@ -42,6 +56,7 @@ class YOLO11Seg:
             if ort.get_device() == "GPU"
             else ["CPUExecutionProvider"],
         )
+        print("使用提供者:", ort.get_device() )
         # 根据 ONNX 模型类型选择 Numpy 数据类型（支持 FP32 和 FP16）
         self.ndtype = np.half if self.session.get_inputs()[0].type == "tensor(float16)" else np.single
 
@@ -262,7 +277,7 @@ class YOLO11Seg:
             masks = masks[:, :, None]
         return masks
  
-    def draw_and_visualize(self, im, bboxes, segments, vis=False, save=True, window_width=None, window_height=None):
+    def draw_and_visualize(self, im, bboxes, segments, vis=False, save=True):
         """
         绘制和可视化结果
         Args:
@@ -271,8 +286,6 @@ class YOLO11Seg:
             segments (List): 分割区域的列表
             vis (bool): 是否使用 OpenCV 显示图像
             save (bool): 是否保存带注释的图像
-            window_width (int, optional): 显示窗口的宽度
-            window_height (int, optional): 显示窗口的高度
         Returns:
             None
         """
@@ -300,17 +313,31 @@ class YOLO11Seg:
             cv2.rectangle(im, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
 
             # 在图像上绘制类别名称和置信度
-            cv2.putText(im, label, (x1, y1 + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2, cv2.LINE_AA)
+            cv2.putText(im, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2, cv2.LINE_AA)
 
         # 将图像和绘制的多边形混合
         im = cv2.addWeighted(im_canvas, 0.3, im, 0.7, 0)
 
-        # 创建可调整大小的窗口
+        # 获取屏幕尺寸
+        monitor = get_monitors()[0]  # 获取第一个监视器的信息
+        screen_width, screen_height = monitor.width, monitor.height
+
+        # 设置窗口尺寸为屏幕尺寸的90%
+        window_width, window_height = int(screen_width * 0.9), int(screen_height * 0.9)
+
+        # 计算图像缩放比例
+        img_height, img_width = im.shape[:2]
+        scale = min(window_width / img_width, window_height / img_height, 1.0)  # 不放大图像
+
+        # 调整图像大小以适应窗口
+        if scale < 1.0:
+            new_size = (int(img_width * scale), int(img_height * scale))
+            im = cv2.resize(im, new_size, interpolation=cv2.INTER_AREA)
+
+        # 创建可调整大小的窗口并设置尺寸
         if vis:
             cv2.namedWindow("Segmentation Result", cv2.WINDOW_NORMAL)
-            if window_width is not None and window_height is not None:
-                cv2.resizeWindow("Segmentation Result", window_width, window_height)  # 设置窗口大小
-                print("调整窗口大小：", window_width, window_height)
+            cv2.resizeWindow("Segmentation Result", im.shape[1], im.shape[0])  # 设置窗口大小为图像大小
             cv2.imshow("Segmentation Result", im)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
@@ -324,8 +351,8 @@ class YOLO11Seg:
 if __name__ == "__main__":
     # 创建命令行参数解析器
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=r"yolo11m-seg.onnx" , help="ONNX 模型路径")
-    parser.add_argument("--source", type=str, default=r"Test5.jpg", help="输入图像路径")
+    parser.add_argument("--model", type=str, default=r"yolo11n-seg.onnx" , help="ONNX 模型路径")
+    parser.add_argument("--source", type=str, default=r"Test6.png", help="输入图像路径")
     parser.add_argument("--conf", type=float, default=0.7, help="置信度阈值")
     parser.add_argument("--iou", type=float, default=0.45, help="NMS 的 IoU 阈值")
     args = parser.parse_args()
@@ -336,9 +363,18 @@ if __name__ == "__main__":
     # 使用 OpenCV 读取图像
     img = cv2.imread(args.source)
 
+    # 计算推理时间
+
+    start_time = time.time()
     # 模型推理
     boxes, segments, _ = model(img, conf_threshold=args.conf, iou_threshold=args.iou)
  
     # 如果检测到目标，绘制边界框和分割区域
     if len(boxes) > 0:
-        model.draw_and_visualize(img, boxes, segments, vis=True, save=True,window_width=img.shape[1],window_height=img.shape[0])
+        model.draw_and_visualize(img, boxes, segments, vis=True, save=True)
+    else:
+        print("未检测到目标。")
+
+    # 计算推理时间
+    end_time = time.time()
+    print("推理时间：", end_time - start_time, "秒。")
