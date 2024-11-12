@@ -156,12 +156,22 @@ class YOLO11Seg:
             masks (np.ndarray): 掩膜数组
         """
         x, protos = preds[0], preds[1]  # 获取模型的两个输出：预测和原型
- 
+
+        # 输出x的前116个数据
+        print("输出x的前15个数据：", x[0][0][:15])
+        
         # 转换维度
         x = np.einsum("bcn->bnc", x)
+        print("输出x的前15个数据：", x[0][0][:15])
+
+        # 输出x形状
+        print("输出x形状：", x.shape)
  
         # 置信度过滤
         x = x[np.amax(x[..., 4:-nm], axis=-1) > conf_threshold]
+
+        print("置信度过滤后的x形状：", x.shape)
+        
  
         # 合并边界框、置信度、类别和掩膜
         x = np.c_[x[..., :4], np.amax(x[..., 4:-nm], axis=-1), np.argmax(x[..., 4:-nm], axis=-1), x[..., -nm:]]
@@ -171,7 +181,7 @@ class YOLO11Seg:
  
         # 解析并返回结果
         if len(x) > 0:
-            # 边界框格式转换：从 cxcywh -> xyxy
+            # 边界框格式转换：从 cx cy w h -> x y x y
             x[..., [0, 1]] -= x[..., [2, 3]] / 2
             x[..., [2, 3]] += x[..., [0, 1]]
  
@@ -351,8 +361,8 @@ class YOLO11Seg:
 if __name__ == "__main__":
     # 创建命令行参数解析器
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default=r"yolo11n-seg.onnx" , help="ONNX 模型路径")
-    parser.add_argument("--source", type=str, default=r"Test6.png", help="输入图像路径")
+    parser.add_argument("--model", type=str, default=r"Models/yolo11n-seg.onnx" , help="ONNX 模型路径")
+    parser.add_argument("--source", type=str, default=r"Images/Test11.png", help="输入图像路径")
     parser.add_argument("--conf", type=float, default=0.7, help="置信度阈值")
     parser.add_argument("--iou", type=float, default=0.45, help="NMS 的 IoU 阈值")
     args = parser.parse_args()
@@ -371,7 +381,7 @@ if __name__ == "__main__":
  
     # 如果检测到目标，绘制边界框和分割区域
     if len(boxes) > 0:
-        model.draw_and_visualize(img, boxes, segments, vis=True, save=True)
+        model.draw_and_visualize(img, boxes, segments, vis=False, save=True)
     else:
         print("未检测到目标。")
 
